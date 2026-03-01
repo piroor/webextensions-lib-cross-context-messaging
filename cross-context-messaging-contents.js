@@ -7,13 +7,22 @@
 
 const CrossContextMessagingContents = (() => {
   const clientId = crypto.randomUUID();
+  location.hash = clientId;
   const channel = new BroadcastChannel('cross-context-messaging');
   const pendingRequests = new Map();
   const messageHandlers = [];
 
   channel.addEventListener('message', async (event) => {
     const data = event.data;
-    if (!data || data.targetClientId !== clientId) return;
+    if (!data) return;
+
+    if (data.type === 'REQ_CLIENT_ID') {
+      history.replaceState(null, '', '#' + clientId);
+      channel.postMessage({ type: 'NOTIFY_CLIENT_ID', clientId });
+      return;
+    }
+
+    if (data.targetClientId !== clientId) return;
 
     if (data.type === 'REQ') {
       let responded = false;
