@@ -52,27 +52,30 @@ CrossContextMessagingBG.onMessage(async (message, sender) => {
   }
 });
 
-// To proactively send a message from the background to a specific client dynamically,
-// you need to know its tabId. 
 browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url.startsWith('https://example.com/')) {
-    // Automatically uses the appropriate backend based on tab.cookieStoreId
-    const response = await CrossContextMessagingBG.sendMessage(tabId, {
-      type: 'INIT_DATA',
-      payload: { userId: 123 }
-    });
-    console.log('Content script replied:', response);
+  if (changeInfo.status === 'complete' && tab.url.startsWith(browser.runtime.getURL(''))) {
+    // You need to manually call `CrossContextMessagingBG.init(tabId)` to specify suitable backend for the tab.
+    // It automatically uses the appropriate backend based on tab.cookieStoreId.
+    CrossContextMessagingBG.init(tabId);
   }
 });
-```
 
-*Note: You do not need to manually call `CrossContextMessagingBG.init(tabId)` if the content script is hosted on an extension page and requests initialization itself.*
+// To proactively send a message from the background to a specific client dynamically,
+// you need to know its tabId.
+function onSomethingFeatureTriggered() {
+  const response = await CrossContextMessagingBG.sendMessage(tabId, {
+    type: 'RUN_COMMAND',
+    payload: { userId: 123 }
+  });
+  console.log('Content script replied:', response);
+}
+```
 
 ## Usage: Content Script / Extension Page (`cross-context-messaging-contents.js`)
 
 Include the script in your content page.
 
-Depending on the backend determined by the background script, it adds `cross-context-messaging-backend=hash` to the query parameters to signal the content page.
+Depending on the backend determined by the background script, it adds `cross-context-messaging-backend=hash` to the query parameters to signal the content page, and CrossContextMessagingContents uses the backend specified by the parameter.
 
 ```javascript
 import CrossContextMessagingContents from './cross-context-messaging-contents.js';
@@ -89,7 +92,7 @@ CrossContextMessagingContents.onMessage(async (message, sender) => {
 // you can proactively request a secure connection to the background.
 async function startApp() {
   try {
-    // Request the background script to initialize the connection.
+    // Request the background script to initialize the connection if the backend is "hash".
     // The background script will verify that this page's URL belongs to the extension.
     await CrossContextMessagingContents.requestInit();
     console.log('Messaging initialized securely.');
