@@ -166,7 +166,7 @@ const CrossContextMessagingBG = (() => {
     state.secret = generateId();
     state.initPromise = new Promise(resolve => {
       function onUpdated(updatedTabId, info, tab) {
-        if (updatedTabId !== tabId || !info.url) return;
+        if (updatedTabId !== tabId || !info.url || tab.url.startsWith('about:blank')) return;
         const url = new URL(info.url);
         const h = url.hash.slice(1);
         if (h === `ACK-INIT:${state.secret}`) {
