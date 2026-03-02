@@ -5,6 +5,9 @@
 */
 'use strict';
 
+import * as Common from './cross-context-messaging-common.js';
+
+
 const CrossContextMessagingBG = (() => {
   // --- BroadcastChannel Variables ---
   const channel = new BroadcastChannel('cross-context-messaging');
@@ -13,8 +16,6 @@ const CrossContextMessagingBG = (() => {
   const urlHashCheckRegExp = /^#([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
   // --- HashMessaging Variables ---
-  const MAX_HASH_BYTES = 6000;
-  const OVERHEAD = 120;
   const incomingBuffers = new Map();
   const tabState = new Map(); // tabId -> { queue: [], isSending: false, secret: null, initPromise: null }
 
@@ -158,6 +159,10 @@ const CrossContextMessagingBG = (() => {
     return tabState.get(tabId);
   }
 
+  function generateId() {
+    return crypto.randomUUID();
+  }
+
   function initHash(tabId, force) {
     const state = ensureTabState(tabId);
     if (state.secret && state.initPromise && !force) {
@@ -184,45 +189,16 @@ const CrossContextMessagingBG = (() => {
     return state.initPromise;
   }
 
-  function encodeBase64(str) {
-    return btoa(unescape(encodeURIComponent(str)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-  }
-
-  function decodeBase64(str) {
-    str = str
-      .replace(/-/g, '+')
-      .replace(/_/g, '/');
-    while (str.length % 4) {
-      str += '=';
-    }
-    return decodeURIComponent(escape(atob(str)));
-  }
-
-  function chunkString(str, size) {
-    const out = [];
-    for (let i = 0; i < str.length; i += size) {
-      out.push(str.slice(i, i + size));
-    }
-    return out;
-  }
-
-  function generateId() {
-    return crypto.randomUUID();
-  }
-
   function updateTabHash(tabId, baseUrl, payload) {
     browser.tabs.update(tabId, {
       url: baseUrl + '#' + payload
     });
   }
 
-  function sendChunksHash(tabId, type, id, data) {
-    const base64 = encodeBase64(JSON.stringify(data));
-    const chunkSize = MAX_HASH_BYTES - OVERHEAD;
-    const chunks = chunkString(base64, chunkSize);
+  async function sendChunksHash(tabId, type, id, data) {
+    const base64 = await Common.compressData(data);
+    const chunkSize = Common.MAX_HASH_BYTES - Common.OVERHEAD;
+    const chunks = Common.chunkString(base64, chunkSize);
     const total = chunks.length;
 
     let index = 0;
@@ -339,18 +315,21 @@ const CrossContextMessagingBG = (() => {
 
     if (buffer.filter(v => v !== undefined).length === total) {
       const full = buffer.join('');
-      const message = JSON.parse(decodeBase64(full));
       incomingBuffers.delete(id);
 
-      if (type === 'REQ') {
-        dispatchRequestHash(tabId, id, message);
-      } else if (type === 'RES') {
-        const resolver = pendingRequests.get(id);
-        if (resolver) {
-          resolver(message);
-          pendingRequests.delete(id);
+      Common.decompressData(full).then(message => {
+        if (type === 'REQ') {
+          dispatchRequestHash(tabId, id, message);
+        } else if (type === 'RES') {
+          const resolver = pendingRequests.get(id);
+          if (resolver) {
+            resolver(message);
+            pendingRequests.delete(id);
+          }
         }
-      }
+      }).catch(err => {
+        console.error('Failed to decompress hash message:', err);
+      });
     }
   }
 
@@ -372,7 +351,8 @@ const CrossContextMessagingBG = (() => {
     }
   }
 
-  browser.tabs.onUpdated.addListener((tabId, info) => {
+  browser.tabs.onUpdated.addListener(async (tabId, info) => {
+    const tab = await browser.tabs.get(tabId);
     if (!info.url || tab.url.startsWith('about:blank')) return;
     handleIncomingHash(tabId, info.url);
   });
@@ -420,8 +400,8 @@ const CrossContextMessagingBG = (() => {
 
   async function getBackendForTab(tab) {
     if (tab.incognito ||
-        (tab.cookieStoreId &&
-         tab.cookieStoreId !== 'firefox-default')) {
+      (tab.cookieStoreId &&
+        tab.cookieStoreId !== 'firefox-default')) {
       return 'hash';
     }
     return 'broadcast';

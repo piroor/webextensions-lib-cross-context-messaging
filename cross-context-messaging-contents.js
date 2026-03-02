@@ -5,6 +5,9 @@
 */
 'use strict';
 
+import * as Common from './cross-context-messaging-common.js';
+
+
 const CrossContextMessagingContents = (() => {
   // --- Initialization based on URL ---
   const useHashBackend = new URLSearchParams(location.search).get('cross-context-messaging-backend') === 'hash';
@@ -14,8 +17,6 @@ const CrossContextMessagingContents = (() => {
   const clientId = useHashBackend ? null : crypto.randomUUID();
 
   // --- HashMessaging Variables ---
-  const MAX_HASH_BYTES = 6000;
-  const OVERHEAD = 120;
   const incomingBuffers = new Map();
   let initPromise = null;
   const sendQueue = [];
@@ -93,31 +94,6 @@ const CrossContextMessagingContents = (() => {
 
   // --- HashMessaging logic ---
 
-  function encodeBase64(str) {
-    return btoa(unescape(encodeURIComponent(str)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-  }
-
-  function decodeBase64(str) {
-    str = str
-      .replace(/-/g, '+')
-      .replace(/_/g, '/');
-    while (str.length % 4) {
-      str += '=';
-    }
-    return decodeURIComponent(escape(atob(str)));
-  }
-
-  function chunkString(str, size) {
-    const out = [];
-    for (let i = 0; i < str.length; i += size) {
-      out.push(str.slice(i, i + size));
-    }
-    return out;
-  }
-
   function generateId() {
     return crypto.randomUUID();
   }
@@ -126,10 +102,10 @@ const CrossContextMessagingContents = (() => {
     history.replaceState(null, '', '#' + payload);
   }
 
-  function sendChunksHash(type, id, data) {
-    const base64 = encodeBase64(JSON.stringify(data));
-    const chunkSize = MAX_HASH_BYTES - OVERHEAD;
-    const chunks = chunkString(base64, chunkSize);
+  async function sendChunksHash(type, id, data) {
+    const base64 = await Common.compressData(data);
+    const chunkSize = Common.MAX_HASH_BYTES - Common.OVERHEAD;
+    const chunks = Common.chunkString(base64, chunkSize);
     const total = chunks.length;
 
     let index = 0;
@@ -231,18 +207,21 @@ const CrossContextMessagingContents = (() => {
 
     if (buffer.filter(v => v !== undefined).length === total) {
       const full = buffer.join('');
-      const message = JSON.parse(decodeBase64(full));
       incomingBuffers.delete(id);
 
-      if (type === 'REQ') {
-        dispatchRequestHash(id, message);
-      } else {
-        const resolver = pendingRequests.get(id);
-        if (resolver) {
-          resolver(message);
-          pendingRequests.delete(id);
+      Common.decompressData(full).then(message => {
+        if (type === 'REQ') {
+          dispatchRequestHash(id, message);
+        } else {
+          const resolver = pendingRequests.get(id);
+          if (resolver) {
+            resolver(message);
+            pendingRequests.delete(id);
+          }
         }
-      }
+      }).catch(err => {
+        console.error('Failed to decompress hash message:', err);
+      });
     }
   }
 
