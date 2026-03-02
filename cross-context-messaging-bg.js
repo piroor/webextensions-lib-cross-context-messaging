@@ -72,7 +72,7 @@ const CrossContextMessagingBG = (() => {
       chrome.tabs.query({}, (tabs) => {
         if (!tabs) return;
         for (const tab of tabs) {
-          if (tab.url) {
+          if (tab.url && !tab.url.startsWith('about:blank')) {
             try {
               const url = new URL(tab.url);
               if (url.hash === '#' + data.clientId) {
