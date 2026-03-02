@@ -419,7 +419,9 @@ const CrossContextMessagingBG = (() => {
   }
 
   async function getBackendForTab(tab) {
-    if (tab.cookieStoreId && tab.cookieStoreId !== 'firefox-default') {
+    if (tab.incognito ||
+        (tab.cookieStoreId &&
+         tab.cookieStoreId !== 'firefox-default')) {
       return 'hash';
     }
     return 'broadcast';
