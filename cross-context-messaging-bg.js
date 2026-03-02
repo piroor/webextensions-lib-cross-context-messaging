@@ -229,7 +229,7 @@ const CrossContextMessagingBG = (() => {
 
     return new Promise(async resolve => {
       function onUpdated(updatedTabId, info, tab) {
-        if (updatedTabId !== tabId || !info.url) return;
+        if (updatedTabId !== tabId || !info.url || tab.url.startsWith('about:blank')) return;
 
         const url = new URL(info.url);
         const h = url.hash.slice(1);
@@ -373,7 +373,7 @@ const CrossContextMessagingBG = (() => {
   }
 
   browser.tabs.onUpdated.addListener((tabId, info) => {
-    if (!info.url) return;
+    if (!info.url || tab.url.startsWith('about:blank')) return;
     handleIncomingHash(tabId, info.url);
   });
 
