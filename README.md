@@ -20,6 +20,12 @@ However, the standard way for a content script or extension page to communicate 
 
 This library was created specifically to solve this final bottleneck. It provides a reliable workaround for bidirectional communication between the content area and the background script **without** needing to invoke any WebExtensions APIs from the content side.
 
+See also:
+
+* [[Bug] Group (folder) tab doesn't load in Fx nightly. · Issue #3867 · piroor/treestyletab](https://github.com/piroor/treestyletab/issues/3867)
+* [Tab Grouping Folders broken · Issue #2356 · mbnuqw/sidebery](https://github.com/mbnuqw/sidebery/issues/2356)
+* [2011234 - Extensions can dynamically execute code in their moz-extension: documents with tabs/scripting.executeScript](https://bugzilla.mozilla.org/show_bug.cgi?id=2011234)
+
 ## Security model
 
 This library uses different security models depending on the backend used:
