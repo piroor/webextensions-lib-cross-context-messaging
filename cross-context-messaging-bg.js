@@ -232,6 +232,11 @@ const CrossContextMessagingBG = (() => {
       browser.tabs.onUpdated.addListener(onUpdated);
 
       const tab = await browser.tabs.get(tabId);
+      if (!tab.url || tab.url.startsWith('about:blank')) {
+        browser.tabs.onUpdated.removeListener(onUpdated);
+        resolve();
+        return;
+      }
       const url = new URL(tab.url);
       const base = url.origin + url.pathname + url.search;
       sendNext(base);
